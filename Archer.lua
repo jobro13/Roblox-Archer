@@ -6,6 +6,11 @@ Archer.Range = 20
 Archer.JobTimer = 1000 -- After x iterations, wait()
 Archer.Iterations = 0
 
+Archer.Mode = "PerInstance" -- Either "PerInstance" or "PerJob". 
+
+-- Per Instance: :StartThread() will loop over all instances, then calling all jobs
+-- Per Job: :StartThread() will loop over all jobs, then calling all instances
+
 -- Instinct auto-calls this;
 function Archer:Constructor()
 	self.Tree = {} 
@@ -49,35 +54,52 @@ end
 
 function Archer:StartThread()
 	delay(0, function()
-		while wait() do 
-			for _, Job in pairs(self.Jobs) do 
-				self:DoJob(Job)
+		if self.Mode == "PerJob" then 
+			while wait() do 
+				for _, Job in pairs(self.Jobs) do 
+					self:DoJob(Job)
+				end 
+			end
+		elseif self.Mode == "PerInstance" then 
+			while wait() do 
+				self:DoJob()
 			end 
-		end
+		else 
+			error(self.Mode .. " mode is unknown for archer. Aborting.")
+		end 
 	end)
 end 
 
 -- Manually call job is possible.
-
+-- If called with nil; loop over all instances, do all jobs. Little haxxy
 function Archer:DoJob(Job)
 	for NodeIdent, Node in pairs(self.Tree) do 
 		local Delta = 0
 		for Index = 1, #Node do 
 			local UseIndex = Index-Delta
 			local Target = Node[UseIndex]
-			self.Iterations = self.Iterations + 1
+			self.Iterations = self.Iterations + 1 -- This job parsing method has weight 1
 			self:CheckIter()
 
 			-- if not in workspace then remove
 
-			local DidChangeNode, IsRemoved = self:ValidateNode(NodeIdent, Target)
-
+			local DidChangeNode, IsRemoved = self:ParseInstance(Target, NodeIdent, Job)
 			if DidChangeNode then 
 				Delta = Delta + 1
 			end 
-			if not IsRemoved then 
-				local Position = self:GetPosition(Target)
+		end 
+	end 
+end 
 
+-- Manually call for given instance is possible too.
+-- If no job is provided, parse all jobs for given target.
+function Archer:ParseInstance(Target, NodeIdent, Job)
+	local DidChangeNode, IsRemoved = self:ValidateNode(NodeIdent, Target)
+	if not IsRemoved then 
+		local Position = self:GetPosition(Target)
+
+		-- HAX
+		for _, Job in pairs((Job and {Job}) or self.Jobs) do 
 				-- Must we run?
 				if Job:ShouldRun(Target) then 
 					-- check for runfirst
@@ -90,24 +112,34 @@ function Archer:DoJob(Job)
 					end
 
 					-- Do for targets
-					local Nodes, NodeIdentifiers = self:GetNearbyNodes(Position, Job.Range or self.Range)
-					for _, TargetNode in pairs(Nodes) do 
-						for _, Inst in pairs(TargetNode) do 
-							local NodeChanged, GotRemoved, CNode = self:ValidateNode(Target)
-							-- If the node is inside the to-check nodes; and not removed from tree, RUN:
-							if not GotRemoved and NodeIdentifiers[CNode] then 
-								-- And finally, do a RANGE CHECK!!
-								local TPos = self:GetPosition(Inst)
-								local Magnitude = (TPos - Position).magnitude 
-								if Magnitude <= (Job.Range or self.Range) then 
-									local Weight = Job:Parse(Inst, Target, Magnitude)
-									if Weight then 
-										self.Iterations = self.Iterations + Weight 
-										self:CheckIter()
-									end 
-								end
-							end 
-						end 	
+					local Range = Job.Range or self.Range
+					-- special case check.
+					if Range > 0 then 
+						local Nodes, NodeIdentifiers = self:GetNearbyNodes(Position, Range)
+						for _, TargetNode in pairs(Nodes) do 
+							local Delta = 0
+							for Index = 1, #TargetNode do 
+								local Inst = TargetNode[Index-Delta]
+
+								local NodeChanged, GotRemoved, CNode = self:ValidateNode(Inst)
+								if NodeChanged then 
+									Delta = Delta + 1 
+								end 
+								-- If the node is inside the to-check nodes; and not removed from tree, RUN:
+								if not GotRemoved and NodeIdentifiers[CNode] then 
+									-- And finally, do a RANGE CHECK!!
+									local TPos = self:GetPosition(Inst)
+									local Magnitude = (TPos - Position).magnitude 
+									if Magnitude <= (Job.Range or self.Range) then 
+										local Weight = Job:Parse(Inst, Target, Magnitude)
+										if Weight then 
+											self.Iterations = self.Iterations + Weight 
+											self:CheckIter()
+										end 
+									end
+								end 
+							end 	
+						end 
 					end 
 
 					if Job.ParseSelfLast then 
@@ -118,11 +150,11 @@ function Archer:DoJob(Job)
 						end 
 					end 
 				end 
-			end 
-		end 
+		 
+		end
 	end 
-end 
-
+	return DidChangeNode, IsRemoved
+end	
 
 -- PRIVATE functions --
 -- No, there is no "security" here, you should just not call them. This is a common Lua practice.
@@ -218,3 +250,5 @@ function Archer:CheckIter()
 		wait()
 	end 
 end
+
+return Archer 
