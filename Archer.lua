@@ -3,7 +3,7 @@ local Archer = {}
 -- Archer range. Archer will not work for ranged checks which are bigger than Range.
 -- [note] It will not error, but it will miss targets.
 Archer.Range = 20
-Archer.JobTimer = 1000 -- After x iterations, wait()
+Archer.JobTimer = 250 -- After x iterations, wait()
 Archer.Iterations = 0
 
 Archer.Mode = "PerInstance" -- Either "PerInstance" or "PerJob". 
@@ -37,7 +37,7 @@ end
 
 -- Additionally, all Parse functions may return a 'weight' for the job done. this will be added towards the Iterations
 -- If the iterations > jobtimer, the thread will yield.
-function Archer:AddJob(Job, Range)
+function Archer:AddJob(Job)
 	if Job.ShouldRun and Job.Parse then 
 		table.insert(self.Jobs, Job)
 	else 
@@ -55,13 +55,13 @@ end
 function Archer:StartThread()
 	delay(0, function()
 		if self.Mode == "PerJob" then 
-			while wait() do 
+			while wait(1/10) do 
 				for _, Job in pairs(self.Jobs) do 
 					self:DoJob(Job)
 				end 
 			end
 		elseif self.Mode == "PerInstance" then 
-			while wait() do 
+			while wait(1/10) do 
 				self:DoJob()
 			end 
 		else 
@@ -83,7 +83,7 @@ function Archer:DoJob(Job)
 
 			-- if not in workspace then remove
 
-			local DidChangeNode, IsRemoved = self:ParseInstance(Target, NodeIdent, Job)
+			local DidChangeNode, IsRemoved = self:ParseInstance(Target, NodeIdent, Job, Index)
 			if DidChangeNode then 
 				Delta = Delta + 1
 			end 
@@ -93,14 +93,17 @@ end
 
 -- Manually call for given instance is possible too.
 -- If no job is provided, parse all jobs for given target.
-function Archer:ParseInstance(Target, NodeIdent, Job)
-	local DidChangeNode, IsRemoved = self:ValidateNode(NodeIdent, Target)
+function Archer:ParseInstance(Target, NodeIdent, Job, Index)
+	local DidChangeNode, IsRemoved = self:ValidateNode(NodeIdent, Target, Index)
 	if not IsRemoved then 
 		local Position = self:GetPosition(Target)
 
 		-- HAX
 		for _, Job in pairs((Job and {Job}) or self.Jobs) do 
 				-- Must we run?
+				self.Iterations = self.Iterations + 1 -- This job parsing method has weight 1
+				self:CheckIter()
+
 				if Job:ShouldRun(Target) then 
 					-- check for runfirst
 					if Job.ParseSelfFirst then 
@@ -116,12 +119,14 @@ function Archer:ParseInstance(Target, NodeIdent, Job)
 					-- special case check.
 					if Range > 0 then 
 						local Nodes, NodeIdentifiers = self:GetNearbyNodes(Position, Range)
-						for _, TargetNode in pairs(Nodes) do 
+						for _, TargetNodeData in pairs(Nodes) do 
+							local TargetNode = TargetNodeData.TargetNode
+							local TNodeIdent = TargetNodeData.TNodeIdent
 							local Delta = 0
 							for Index = 1, #TargetNode do 
 								local Inst = TargetNode[Index-Delta]
 
-								local NodeChanged, GotRemoved, CNode = self:ValidateNode(Inst)
+								local NodeChanged, GotRemoved, CNode = self:ValidateNode(TNodeIdent, Inst, Index-Delta)
 								if NodeChanged then 
 									Delta = Delta + 1 
 								end 
@@ -131,7 +136,7 @@ function Archer:ParseInstance(Target, NodeIdent, Job)
 									local TPos = self:GetPosition(Inst)
 									local Magnitude = (TPos - Position).magnitude 
 									if Magnitude <= (Job.Range or self.Range) then 
-										local Weight = Job:Parse(Inst, Target, Magnitude)
+										local Weight = Job:Parse(Inst, Target, Magnitude) or 1
 										if Weight then 
 											self.Iterations = self.Iterations + Weight 
 											self:CheckIter()
@@ -178,6 +183,15 @@ function Archer:Insert(Inst, PosIdent)
 	end
 end 
 
+local function dump(t,l)
+	for i,v in pairs(t) do
+		print(string.rep("   ", (l or 0)) .. tostring(i) .. " : " .. tostring(v))
+		if type(v) == "table" then
+			dump(v, ( l or 0) + 1)
+		end
+	end
+end
+
 function Archer:Remove(Node, Index)
 	table.remove(Node, Index)
 	if Index==1 then 
@@ -187,11 +201,11 @@ end
 
 -- Validate node. If changed, returns "true". If the target is removed from the search tree, returns true as second arg too.
 -- Returns current node of Target as third arg.
-function Archer:ValidateNode(CurrentNode, Target)
+function Archer:ValidateNode(CurrentNode, Target, Index)
 
 			if not Target:IsDescendantOf(game.Workspace) then 
-				Delta = Delta+1
-				self:Remove(Node, UseIndex)
+
+				self:Remove(CurrentNode, Index)
 				return true, true, nil
 			else
 
@@ -200,8 +214,8 @@ function Archer:ValidateNode(CurrentNode, Target)
 				local Position = self:GetPosition(Target)
 				local MyIdent = self:GetNode(Position)
 				if MyIdent ~= CurrentNode then 
-					Delta = Delta + 1
-					self:Remove(Node, UseIndex)
+					print(CurrentNode , 'node')
+					self:Remove(self.Tree[CurrentNode], Index)
 					self:Insert(Target, MyIdent)
 					return true, false, MyIdent 
 				end	
@@ -219,15 +233,17 @@ function Archer:GetNearbyNodes(Position, Range)
 	local Strings = {}
 	setmetatable(Out, {__index=table})
 
-	for xdelta = {-1, 0, 1} do 
-		for ydelta = {-1, 0, 1} do 
-			for zdelta = {-1, 0, 1} do 
-					local MyNodeString = self:GetNode(Position)
+	for xdelta = -1, 1, 1 do 
+		for ydelta = -1, 1, 1 do 
+			for zdelta = -1, 1, 1 do 
+					local nVec = {x = Position.x + xdelta * Range, y = Position.y + ydelta * Range, z = Position.z + zdelta * Range}				
+				
+					local MyNodeString = self:GetNode(nVec)
 
 					if not Strings[MyNodeString] then 
 						Strings[MyNodeString] = true 
 						if self.Tree[MyNodeString] then 
-							Out:insert(self.Tree[MyNodeString])
+							Out:insert({TargetNode = self.Tree[MyNodeString], TNodeIdent = MyNodeString})
 						end
 					end 
 			end  
@@ -247,7 +263,7 @@ end
 function Archer:CheckIter()
 	if self.Iterations >= self.JobTimer then 
 		self.Iterations = 0
-		wait()
+		wait(1/10)
 	end 
 end
 
