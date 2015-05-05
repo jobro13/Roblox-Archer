@@ -50,7 +50,7 @@ This is not a method, but a property. You can set this Range property to define 
 
 Defines the size of a box to store instances in. You should find a good balance in this. Note: Archer will currently only check for neighbouring boxes. This means that if you have a Job with a Range > Archer.Range, it will (in most cases) MISS certain instances. To fix this, you should make this range bigger. 
 
-Note that if Archer.Range = math.huge, a normal "job loop" is created without the advantages of the binary search. You can use this to benchmark the utility.
+Note that if Archer.Range = a huge number a normal "job loop" is created without the advantages of the binary search. You can use this to benchmark the utility. math.huge will not work, as 0 * math.huge is undefined (check the :GetNode function, you can change this to define it for behaviour for math.huge))
 
 #### Archer.JobTimer
 
@@ -94,9 +94,9 @@ You can also manually call Jobs (for instnace, to create a manual scheduler). Yo
 
 This function can be manually called, but due to Archers setup there is a problem. Let's first look at the function itself. Target is the Target instance. NodeIdent is the Node identifier, which means that Archer.Tree[NodeIdentifier] is the table containing the Target. Due to how Archer creates the Data tree, this is also the ONLY table which contains this target. The problem is this NodeIdentifier. This is not stored anywhere besides the tree itself. To retrieve it:
 
-1) Loop over the whole tree to find it. BAD, but works.
-2) Try to figure out where it could be located by calling the :GetNode function.
-3) Change Archer so it stores the NodeIdent in another table too. (not available as of this version yet, feel free to issue a pull request)
+1. Loop over the whole tree to find it. BAD, but works.
+2. Try to figure out where it could be located by calling the :GetNode function.
+3. Change Archer so it stores the NodeIdent in another table too. (not available as of this version yet, feel free to issue a pull request)
 
 Job is the Job object to parse. If Job is nil, Archer will check all Jobs.
 
