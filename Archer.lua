@@ -1,4 +1,5 @@
 local Archer = {}
+Archer.__index = Archer
 
 -- Archer range. Archer will not work for ranged checks which are bigger than Range.
 -- [note] It will not error, but it will miss targets.
@@ -11,17 +12,15 @@ Archer.Mode = "PerInstance" -- Either "PerInstance" or "PerJob".
 -- Per Instance: :StartThread() will loop over all instances, then calling all jobs
 -- Per Job: :StartThread() will loop over all jobs, then calling all instances
 
--- Instinct auto-calls this;
-function Archer:Constructor()
+function Archer:New()
+	local self = {}
+	setmetatable(self, Archer)
+
 	self.Tree = {} 
 	self.Jobs = {}
-end
 
-function Archer:New()
-	local my = setmetatable({}, {__index=self})
-	my:Constructor()
-	return my
-end 
+	return self
+end
 
 -- PUBLIC functions --
 
