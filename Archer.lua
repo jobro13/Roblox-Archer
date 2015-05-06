@@ -53,7 +53,7 @@ function Archer:Add(Inst)
 end 
 
 function Archer:StartThread()
-	delay(0, function()
+	assert(coroutine.resume(coroutine.create(function()
 		if self.Mode == "PerJob" then 
 			while wait(1/10) do 
 				for _, Job in pairs(self.Jobs) do 
@@ -67,7 +67,7 @@ function Archer:StartThread()
 		else 
 			error(self.Mode .. " mode is unknown for archer. Aborting.")
 		end 
-	end)
+	end)))
 end 
 
 -- Manually call job is possible.
