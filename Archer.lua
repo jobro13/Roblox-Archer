@@ -233,9 +233,9 @@ function Archer:GetNearbyNodes(Position, Range)
 	local Strings = {}
 	setmetatable(Out, {__index=table})
 
-	for xdelta = -1, 1, 1 do 
-		for ydelta = -1, 1, 1 do 
-			for zdelta = -1, 1, 1 do 
+	for xdelta = -1, 1 do 
+		for ydelta = -1, 1 do 
+			for zdelta = -1, 1 do 
 					local nVec = {x = Position.x + xdelta * Range, y = Position.y + ydelta * Range, z = Position.z + zdelta * Range}				
 				
 					local MyNodeString = self:GetNode(nVec)
