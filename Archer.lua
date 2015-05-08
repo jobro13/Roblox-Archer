@@ -1,4 +1,5 @@
 local Archer = {}
+Archer.__index = Archer
 
 -- Archer range. Archer will not work for ranged checks which are bigger than Range.
 -- [note] It will not error, but it will miss targets.
@@ -11,17 +12,15 @@ Archer.Mode = "PerInstance" -- Either "PerInstance" or "PerJob".
 -- Per Instance: :StartThread() will loop over all instances, then calling all jobs
 -- Per Job: :StartThread() will loop over all jobs, then calling all instances
 
--- Instinct auto-calls this;
-function Archer:Constructor()
+function Archer:New()
+	local self = {}
+	setmetatable(self, Archer)
+
 	self.Tree = {} 
 	self.Jobs = {}
-end
 
-function Archer:New()
-	local my = setmetatable({}, {__index=self})
-	my:Constructor()
-	return my
-end 
+	return self
+end
 
 -- PUBLIC functions --
 
@@ -53,7 +52,7 @@ function Archer:Add(Inst)
 end 
 
 function Archer:StartThread()
-	delay(0, function()
+	assert(coroutine.resume(coroutine.create(function()
 		if self.Mode == "PerJob" then 
 			while wait(1/10) do 
 				for _, Job in pairs(self.Jobs) do 
@@ -67,7 +66,7 @@ function Archer:StartThread()
 		else 
 			error(self.Mode .. " mode is unknown for archer. Aborting.")
 		end 
-	end)
+	end)))
 end 
 
 -- Manually call job is possible.
@@ -233,9 +232,9 @@ function Archer:GetNearbyNodes(Position, Range)
 	local Strings = {}
 	setmetatable(Out, {__index=table})
 
-	for xdelta = -1, 1, 1 do 
-		for ydelta = -1, 1, 1 do 
-			for zdelta = -1, 1, 1 do 
+	for xdelta = -1, 1 do 
+		for ydelta = -1, 1 do 
+			for zdelta = -1, 1 do 
 					local nVec = {x = Position.x + xdelta * Range, y = Position.y + ydelta * Range, z = Position.z + zdelta * Range}				
 				
 					local MyNodeString = self:GetNode(nVec)
